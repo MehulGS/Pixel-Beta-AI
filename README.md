@@ -1,64 +1,91 @@
-# InsightAI
+# Pixel Beta AI
 
-A local-first multimodal AI application for image captioning, visual question answering, multilingual text understanding, and audio transcription/interpretation.
-
-Everything runs on your own machine — no cloud API keys required.
+A local-first multimodal AI workspace for image, audio, and document understanding — all running on your own machine. No cloud API keys, no data sent to external servers.
 
 ---
 
-## Features
+## What it can do
 
-| Feature | Model / Tool |
+| Feature | How to use it |
 |---|---|
+| Image captioning | Attach a JPG/PNG/WebP and send without a question |
+| Visual Q&A | Attach an image and ask a specific question |
+| Text understanding | Type Hindi, Hinglish, English, idioms, or slang |
+| Audio transcription | Attach an MP3/WAV/M4A/etc — transcript is returned automatically |
+| Audio understanding | After transcription, the AI interprets the content |
+| PDF summarization | Attach a PDF and send without a question |
+| PDF Q&A | Attach a PDF and ask a question about its content |
+
+---
+
+## Technology stack
+
+| Component | Technology |
+|---|---|
+| Frontend | React 19, Vite 8, TypeScript 6 |
+| Backend | Python 3.11, FastAPI |
 | Image captioning | BLIP (Salesforce/blip-image-captioning-base) |
 | Visual Q&A | SmolVLM-256M-Instruct |
-| Text understanding (Hindi / Hinglish / English) | qwen2.5:1.5b via Ollama |
+| Text/audio/document AI | qwen2.5:1.5b via Ollama |
 | Audio transcription | faster-whisper (small, CPU, int8) |
-| Audio understanding | qwen2.5:1.5b via Ollama |
+| Audio preprocessing | FFmpeg |
+| PDF extraction | pypdf |
+| Conversation storage | Browser localStorage (local, no server required) |
 
 ---
 
-## Requirements
+## Prerequisites
 
-- **Python 3.10+** with a virtual environment at `image-ai/.venv`
-- **FFmpeg** installed and available in `PATH` (used for audio preprocessing)
-- **Ollama** running locally at `http://127.0.0.1:11434` with the `qwen2.5:1.5b` model pulled
-- **Node.js 18+** for the frontend
+| Requirement | Version | Notes |
+|---|---|---|
+| Python | 3.11.9 | Must match the .venv |
+| Node.js | 18+ | For the frontend |
+| Ollama | Latest | [https://ollama.com](https://ollama.com) |
+| FFmpeg | Any recent | Must be in PATH |
+
+**Operating system:** Windows (PowerShell). macOS/Linux should work with minor command adjustments.
 
 ---
 
-## Setup
+## Installation and setup
 
-### 1. Ollama
+### 1. Install Ollama and pull the model
 
-Install Ollama from https://ollama.com and pull the model:
+Download Ollama from [https://ollama.com](https://ollama.com), install it, then open a terminal and run:
 
-```sh
+```powershell
 ollama pull qwen2.5:1.5b
 ```
 
-### 2. Python backend
+This downloads the language model (~1 GB). You only need to do this once.
 
-```sh
+### 2. Install FFmpeg
+
+Download FFmpeg from [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html).
+
+Add `ffmpeg.exe` to your system PATH. To verify:
+
+```powershell
+ffmpeg -version
+```
+
+FFmpeg is required for audio format conversion before transcription.
+
+### 3. Set up the Python virtual environment
+
+The `.venv` is already present in `image-ai/`. If you need to recreate it:
+
+```powershell
 cd image-ai
 python -m venv .venv
-
-# Windows PowerShell
-.venv\Scripts\pip install fastapi uvicorn[standard] httpx pillow transformers torch torchvision faster-whisper
-
-# First run will download BLIP, SmolVLM, and Whisper models automatically.
+.venv\Scripts\pip install fastapi "uvicorn[standard]" httpx pillow transformers torch torchvision faster-whisper pypdf python-multipart
 ```
 
-All dependencies already installed:
+First startup will automatically download BLIP, SmolVLM, and the Whisper model weights (~1–2 GB total). This only happens once; they are cached by HuggingFace.
 
-```
-fastapi, uvicorn, httpx, pillow, transformers, torch (CPU), faster-whisper,
-pydub, scipy, numpy, av
-```
+### 4. Install frontend dependencies
 
-### 3. Frontend
-
-```sh
+```powershell
 cd frontend
 npm install
 ```
@@ -67,201 +94,163 @@ npm install
 
 ## Running the application
 
-Open **three** terminals:
+You need **three terminals** open simultaneously.
 
-**Terminal 1 — Ollama**
-```sh
+**Terminal 1 — Ollama (the language model server)**
+```powershell
 ollama serve
 ```
+Leave this running. Ollama listens on port 11434.
 
-**Terminal 2 — FastAPI backend**
-```sh
+**Terminal 2 — Python backend (the AI API)**
+```powershell
 cd image-ai
 .venv\Scripts\uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
+Leave this running. The API listens on port 8000.
+On first startup it will download and load the image models — this takes 1–3 minutes.
 
-**Terminal 3 — Vite frontend**
-```sh
+**Terminal 3 — React frontend (the web UI)**
+```powershell
 cd frontend
 npm run dev
 ```
+Leave this running. The UI is available at: **http://localhost:5173**
 
-Then open http://localhost:5173 in your browser.
+Open http://localhost:5173 in your browser.
 
 ---
 
-## API Endpoints
+## Required ports
 
-### `GET /`
-Returns application info and feature list.
+| Service | Port |
+|---|---|
+| Vite (frontend) | 5173 |
+| FastAPI (backend) | 8000 |
+| Ollama | 11434 |
 
-### `GET /health`
-Returns model load status.
+If a port is already in use, you will get a "port already in use" error. Stop the other process or change the port in the relevant config.
 
-### `POST /analyze`
-Image captioning.
+---
 
-- Body: `multipart/form-data`
-  - `file`: image (JPG, PNG, WebP, max 8 MB)
-- Response: `{ filename, description, model }`
+## Conversation persistence
 
-### `POST /ask`
-Visual question answering.
+All conversation history is stored in your browser's `localStorage` under the key prefix `pba_`. This data:
 
-- Body: `multipart/form-data`
-  - `file`: image
-  - `question`: string (max 1000 chars)
-- Response: `{ filename, question, answer, model }`
+- Survives page refreshes and browser restarts.
+- Is stored only in your browser — nothing leaves your computer.
+- Can be cleared by clearing browser data (Settings → Clear browsing data).
+- Contains only text (filenames, messages, AI responses) — uploaded files are NOT stored.
 
-### `POST /understand-text`
-Multilingual text interpretation (Hindi, Hinglish, English, idioms).
+---
 
-- Body: `application/x-www-form-urlencoded`
-  - `text`: string (max 5000 chars)
-- Response: `{ input, answer, model, source }`
+## Environment variables
 
-### `POST /transcribe-audio`
-Audio transcription with automatic language detection.
+No environment variables are required for local use. The application connects to:
+- `http://127.0.0.1:8000` (FastAPI backend)
+- `http://127.0.0.1:11434` (Ollama)
 
-- Body: `multipart/form-data`
-  - `file`: audio (MP3, WAV, M4A, OGG, WebM, FLAC — max 25 MB)
-  - `language` *(optional)*: `en`, `hi`, or omit for auto-detection
-- Response:
-```json
-{
-  "filename": "example.mp3",
-  "language": "en",
-  "language_probability": 0.95,
-  "transcript": "Recognized speech here.",
-  "segments": [
-    { "start": 0.0, "end": 2.5, "text": "Recognized speech here." }
-  ],
-  "model": "faster-whisper-small",
-  "transcription_status": "success"
-}
+Both addresses are hardcoded as local-only defaults.
+
+---
+
+## Build commands
+
+**Frontend production build:**
+```powershell
+cd frontend
+npm run build
+```
+Output goes to `frontend/dist/`.
+
+**Frontend type check (no build):**
+```powershell
+cd frontend
+npx tsc --noEmit
 ```
 
-`transcription_status` values: `success`, `empty_transcript`
-
-### `POST /understand-audio`
-Interprets an audio transcript using the local Ollama model.
-
-- Body: `application/json`
-```json
-{
-  "transcript": "Kutte, main tera khoon pee jaunga",
-  "language": "hi",
-  "filename": "dialogue.mp3"
-}
-```
-- Response:
-```json
-{
-  "transcript": "...",
-  "analysis": "1. Language(s)...\n2. Summary...\n...",
-  "model": "qwen2.5:1.5b",
-  "source": "ollama"
-}
-```
-
-`source` is `"known_phrase"` for exact matches in the built-in Hindi phrase dictionary (no Ollama required), or `"ollama"` for LLM analysis.
-
----
-
-## Supported Audio Formats
-
-| Format | Extension | Notes |
-|---|---|---|
-| MP3 | .mp3 | Most common |
-| WAV | .wav | Recommended for best accuracy |
-| M4A | .m4a | AAC audio |
-| OGG | .ogg | Vorbis |
-| WebM | .webm | Browser recordings |
-| FLAC | .flac | Lossless |
-
-Audio is converted to 16 kHz mono WAV via FFmpeg before transcription.
-Maximum file size: 25 MB.
-
----
-
-## Language Support
-
-The Whisper `small` model supports 99 languages. Auto-detection is enabled by default. You can pass `language=en` or `language=hi` to override.
-
-**Important limitations:**
-- Language probability of 1.0 does not guarantee accurate word recognition.
-- Noisy, compressed, comedic, or music-heavy audio will produce lower quality transcripts.
-- Code-switching (mid-sentence Hindi/English mixing) is partially supported but may produce mixed results.
-- Roman Hindi and Hinglish may be transcribed as Devanagari or as approximate English.
-- The app reports uncertainty rather than fabricating a transcript.
-
----
-
-## Running the test suite
-
-The backend must be running before executing tests.
-
-```sh
+**Backend tests (requires the FastAPI server to be running):**
+```powershell
 cd image-ai
-.venv\Scripts\python.exe test_api.py
+.venv\Scripts\python test_api.py
 ```
-
-Optional: specify a different server URL:
-```sh
-.venv\Scripts\python.exe test_api.py --url http://127.0.0.1:8000
-```
-
-Tests cover:
-- Health and root endpoints
-- Empty audio upload
-- Unsupported MIME type
-- Oversized audio (>25 MB)
-- Silent WAV transcription
-- Real audio files (if present in image-ai/)
-- Language override
-- Empty transcript rejection
-- Known Hindi phrase dictionary match
-- English transcript via Ollama (skipped if Ollama unavailable)
-- Text understanding regression
 
 ---
 
-## Manual Tests Required
+## Troubleshooting
 
-These require human evaluation and cannot be automated:
+See `docs/TROUBLESHOOTING.md` for detailed solutions to common errors.
 
-1. **Hindi speech** — verify Devanagari or Roman Hindi is transcribed correctly
-2. **Roman Hindi / Hinglish** — e.g., "Kutte main tera khoon pee jaunga" audio
-3. **English speech** — verify language is detected as `en`, not forced to `hi`
-4. **Mixed Hindi-English** — verify code-switching is handled without mangling
-5. **Comedy / noisy audio** — verify uncertainty is reported rather than fabricated text
-6. **Ollama unavailable** — stop Ollama, try Understand Audio, expect 503 error in UI
-7. **Image captioning** — upload any JPG/PNG and check BLIP description
-8. **Visual Q&A** — upload image and ask a question
-9. **Drag-and-drop** — test both image and audio drop zones
+Quick checks:
+- **"Ollama is unavailable"** — run `ollama serve` in a terminal
+- **"Image models not loaded"** — wait for startup, check Terminal 2 for errors
+- **"CORS error"** — make sure you are using http://localhost:5173 not a different port
+- **"Cannot find module"** — run `npm install` in the `frontend/` folder
 
 ---
 
-## Architecture
+## Project structure
 
 ```
-frontend/          React + Vite + TypeScript
-  src/App.tsx      UI — image and audio sections
-  src/App.css      Styling
-
-image-ai/          Python backend
-  main.py          FastAPI application
-                   - BLIP image captioning
-                   - SmolVLM visual Q&A
-                   - faster-whisper audio transcription
-                   - Ollama text/audio understanding
-  test_api.py      Automated API tests
-  test_audio.py    Interactive Whisper CLI tester
-  test_summary.py  Interactive Ollama transcript interpreter
+multimodal-ai/
+├── README.md                 ← You are here
+├── docs/                     ← All documentation
+│   ├── ARCHITECTURE.md
+│   ├── BEGINNER_GUIDE.md
+│   ├── API_REFERENCE.md
+│   ├── AI_MODELS.md
+│   ├── DATA_AND_PRIVACY.md
+│   ├── TROUBLESHOOTING.md
+│   └── ROADMAP.md
+│
+├── frontend/                 ← React + Vite + TypeScript
+│   ├── src/
+│   │   ├── App.tsx           ← Root layout component
+│   │   ├── App.css           ← Complete design system (CSS variables + styles)
+│   │   ├── types.ts          ← All TypeScript type definitions
+│   │   ├── components/       ← UI components
+│   │   │   ├── AnimatedAICore.tsx
+│   │   │   ├── AttachmentPreview.tsx
+│   │   │   ├── ChatView.tsx
+│   │   │   ├── ConversationList.tsx
+│   │   │   ├── EmptyState.tsx
+│   │   │   ├── MessageBubble.tsx
+│   │   │   ├── MessageComposer.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   └── ThemeSelector.tsx
+│   │   ├── hooks/            ← Custom React hooks
+│   │   │   ├── useConversations.ts
+│   │   │   └── useTheme.ts
+│   │   └── lib/              ← Non-UI utilities
+│   │       ├── api.ts        ← All API calls
+│   │       └── storage.ts    ← localStorage persistence
+│   ├── index.html
+│   └── package.json
+│
+├── image-ai/                 ← Python backend
+│   ├── main.py               ← FastAPI application (all endpoints)
+│   ├── test_api.py           ← Automated API tests
+│   └── .venv/                ← Python virtual environment
+│
+└── state/                    ← (reserved for future server-side storage)
 ```
 
 ---
 
 ## Privacy
 
-All inference runs locally. No audio, images, or text are sent to external services.
+All AI inference runs locally on your computer. No images, audio, text, or PDF content is sent to external servers. The only network requests are:
+- Your browser → `http://127.0.0.1:8000` (local Python server)
+- Python server → `http://127.0.0.1:11434` (local Ollama)
+
+No telemetry. No accounts. No internet required after initial model downloads.
+
+---
+
+## Current limitations
+
+- Image models: BLIP and SmolVLM are small models. Accuracy on complex or ambiguous scenes is limited.
+- Audio: Long audio files (>25 MB) are rejected. Noisy audio may produce incorrect transcripts.
+- PDF: Scanned (image-based) PDFs cannot be read without OCR (not yet implemented).
+- Conversations: Stored in browser localStorage. Clearing browser data removes all history.
+- Performance: Models run on CPU. Each request takes several seconds to a minute depending on hardware.

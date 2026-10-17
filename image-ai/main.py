@@ -175,11 +175,11 @@ async def lifespan(app: FastAPI):
     vlm_model.eval()
     print("SmolVLM model loaded.")
 
-    print("InsightAI image models are ready. Whisper loads on first audio request.")
+    print("Pixel Beta AI image models are ready. Whisper loads on first audio request.")
 
     yield
 
-    print("InsightAI shutting down.")
+    print("Pixel Beta AI shutting down.")
 
 
 # --------------------------------------------------
@@ -187,12 +187,12 @@ async def lifespan(app: FastAPI):
 # --------------------------------------------------
 
 app = FastAPI(
-    title="InsightAI",
+    title="Pixel Beta AI",
     description=(
-        "Local image captioning, visual question answering, "
-        "multilingual text understanding, and audio transcription."
+        "Local multimodal AI workspace — image captioning, visual question answering, "
+        "multilingual text understanding, audio transcription, and document AI."
     ),
-    version="1.1.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -215,14 +215,17 @@ app.add_middleware(
 @app.get("/")
 def home():
     return {
-        "message": "InsightAI API is running",
-        "version": "1.1.0",
+        "message": "Pixel Beta AI API is running",
+        "version": "2.0.0",
         "features": [
             "image-captioning",
             "visual-question-answering",
             "multilingual-text-understanding",
             "audio-transcription",
             "audio-understanding",
+            "document-extraction",
+            "document-summarization",
+            "document-qa",
         ],
     }
 
@@ -389,7 +392,7 @@ async def understand_text(text: str = Form(...)):
                 f"Emotion or tone: {known_phrase['emotion']}\n"
                 f"Confidence: {known_phrase['confidence']}"
             ),
-            "model": "InsightAI Hindi Phrase Dictionary",
+            "model": "Pixel Beta AI Hindi Phrase Dictionary",
             "source": "known_phrase",
         }
 
@@ -819,7 +822,7 @@ async def understand_audio(payload: UnderstandAudioRequest):
         return {
             "transcript": transcript,
             "analysis": answer + transcription_warning,
-            "model": "InsightAI Hindi Phrase Dictionary",
+            "model": "Pixel Beta AI Hindi Phrase Dictionary",
             "source": "known_phrase",
         }
 
@@ -1093,7 +1096,7 @@ async def ask_pdf_question(
         document_text = "\n\n".join(pages)[:12000]
 
         prompt = f"""
-You are InsightAI, a document question-answering assistant.
+You are Pixel Beta AI, a document question-answering assistant.
 
 Answer the question using ONLY the PDF content below.
 
