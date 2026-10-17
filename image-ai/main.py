@@ -28,8 +28,11 @@ BLIP_ID = "Salesforce/blip-image-captioning-base"
 VLM_ID = "HuggingFaceTB/SmolVLM-256M-Instruct"
 WHISPER_MODEL_SIZE = "small"
 
-OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
-OLLAMA_MODEL = "qwen2.5:1.5b"
+OLLAMA_URL = os.getenv(
+    "OLLAMA_URL",
+    "http://127.0.0.1:11434/api/generate",
+)
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
 
 MAX_IMAGE_SIZE = 8 * 1024 * 1024
 MAX_AUDIO_SIZE = 25 * 1024 * 1024
@@ -885,9 +888,9 @@ DOCUMENT:
 
         async with httpx.AsyncClient(timeout=180.0) as client:
             response = await client.post(
-                "http://127.0.0.1:11434/api/generate",
+                OLLAMA_URL,
                 json={
-                    "model": "qwen2.5:1.5b",
+                    "model": OLLAMA_MODEL,
                     "prompt": prompt,
                     "stream": False
                 }
@@ -984,9 +987,9 @@ ANSWER:
 
         async with httpx.AsyncClient(timeout=180.0) as client:
             response = await client.post(
-                "http://127.0.0.1:11434/api/generate",
+                OLLAMA_URL,
                 json={
-                    "model": "qwen2.5:1.5b",
+                    "model": OLLAMA_MODEL,
                     "prompt": prompt,
                     "stream": False
                 }
