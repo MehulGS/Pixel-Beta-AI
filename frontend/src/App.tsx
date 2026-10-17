@@ -8,6 +8,7 @@ import {
   Sparkles,
   Upload,
   X,
+  FileText
 } from "lucide-react";
 import "./App.css";
 
@@ -45,6 +46,24 @@ type AudioUnderstandingResult = {
   source: string;
 };
 
+
+type DocumentPage = {
+  page: number;
+  text: string;
+};
+
+type DocumentSummaryResult = {
+  filename: string;
+  summary: string;
+};
+
+type DocumentAnswerResult = {
+  filename: string;
+  question: string;
+  answer: string;
+};
+
+
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
@@ -71,6 +90,19 @@ function App() {
     useState<AudioUnderstandingResult | null>(null);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const audioInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Document AI state ─────────────────────────────────────────────
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentError, setDocumentError] = useState("");
+  const [documentSummary, setDocumentSummary] =
+    useState<DocumentSummaryResult | null>(null);
+  const [documentQuestion, setDocumentQuestion] = useState("");
+  const [documentAnswer, setDocumentAnswer] =
+    useState<DocumentAnswerResult | null>(null);
+  const [extractingDocument, setExtractingDocument] = useState(false);
+  const [summarizingDocument, setSummarizingDocument] = useState(false);
+  const [askingDocument, setAskingDocument] = useState(false);
+
 
   const ALLOWED_AUDIO_EXTS = ".mp3,.wav,.m4a,.ogg,.webm,.flac";
   const MAX_AUDIO_MB = 25;
@@ -329,6 +361,127 @@ function App() {
     if (!code) return "Unknown";
     return map[code] ?? code.toUpperCase();
   }
+
+
+  // ── Document AI handlers ──────────────────────────────────────────
+
+  function handleDocumentFile(selectedFile?: File) {
+    if (!selectedFile) return;
+
+    if (
+      selectedFile.type !== "application/pdf" &&
+      !selectedFile.name.toLowerCase().endsWith(".pdf")
+    ) {
+      setDocumentError("Please select a PDF file.");
+      return;
+    }
+
+    if (selectedFile.size === 0) {
+      setDocumentError("The selected PDF is empty.");
+      return;
+    }
+
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setDocumentError("PDF size must not exceed 10 MB.");
+      return;
+    }
+
+    setDocumentFile(selectedFile);
+    setDocumentError("");
+    setDocumentSummary(null);
+    setDocumentAnswer(null);
+    setDocumentQuestion("");
+  }
+
+  function clearDocument() {
+    setDocumentFile(null);
+    setDocumentError("");
+    setDocumentSummary(null);
+    setDocumentAnswer(null);
+    setDocumentQuestion("");
+  }
+
+  async function summarizeDocument() {
+    if (!documentFile || summarizingDocument) return;
+
+    setSummarizingDocument(true);
+    setDocumentError("");
+    setDocumentSummary(null);
+
+    const formData = new FormData();
+    formData.append("file", documentFile);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/document/summarize`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "PDF summarization failed.");
+      }
+
+      setDocumentSummary(data as DocumentSummaryResult);
+    } catch (err) {
+      setDocumentError(
+        err instanceof Error
+          ? `${err.message} Check that the Python API and Ollama are running.`
+          : "Unable to summarize PDF."
+      );
+    } finally {
+      setSummarizingDocument(false);
+    }
+  }
+
+  async function askDocumentQuestion() {
+    if (
+      !documentFile ||
+      !documentQuestion.trim() ||
+      askingDocument
+    ) {
+      return;
+    }
+
+    setAskingDocument(true);
+    setDocumentError("");
+    setDocumentAnswer(null);
+
+    const formData = new FormData();
+    formData.append("file", documentFile);
+    formData.append("question", documentQuestion.trim());
+
+    try {
+      const response = await fetch(
+        `${API_URL}/document/ask`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Document question failed.");
+      }
+
+      setDocumentAnswer(data as DocumentAnswerResult);
+    } catch (err) {
+      setDocumentError(
+        err instanceof Error
+          ? `${err.message} Check that the Python API and Ollama are running.`
+          : "Unable to answer the document question."
+      );
+    } finally {
+      setAskingDocument(false);
+    }
+  }
+
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -649,6 +802,135 @@ function App() {
             </section>
           )}
         </section>
+
+        
+        {/* ── Document AI Section ── */}
+        <section className="workspace document-workspace">
+          <div className="workspace-heading">
+            <div>
+              <h2>Understand a Document</h2>
+              <p>Upload a PDF to summarize it or ask questions about its content.</p>
+            </div>
+            <FileText size={25} className="heading-icon" />
+          </div>
+
+          {!documentFile ? (
+            <label className="upload-zone">
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={(e) => handleDocumentFile(e.target.files?.[0])}
+              />
+              <span className="upload-icon">
+                <Upload size={27} />
+              </span>
+              <strong>Choose your PDF document</strong>
+              <span className="muted">Click to browse files</span>
+              <span className="file-types">PDF · MAX 10 MB</span>
+            </label>
+          ) : (
+            <div className="preview-card">
+              <span className="audio-file-icon">
+                <FileText size={36} />
+              </span>
+              <div className="preview-info">
+                <strong>{documentFile.name}</strong>
+                <span className="muted">
+                  {formatFileSize(documentFile.size)}
+                </span>
+              </div>
+              <button
+                className="icon-button"
+                onClick={clearDocument}
+                aria-label="Remove PDF"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          )}
+
+          {documentError && (
+            <p className="error-message">{documentError}</p>
+          )}
+
+          <button
+            className="analyze-button"
+            onClick={summarizeDocument}
+            disabled={!documentFile || summarizingDocument}
+          >
+            {summarizingDocument ? (
+              <>
+                <LoaderCircle className="spin" size={19} />
+                Summarizing PDF...
+              </>
+            ) : (
+              <>
+                <Sparkles size={19} />
+                Summarize PDF
+              </>
+            )}
+          </button>
+
+          {documentSummary && (
+            <section className="result-card" aria-live="polite">
+              <span className="result-label">
+                <Sparkles size={16} /> DOCUMENT SUMMARY
+              </span>
+              <h3>{documentSummary.filename}</h3>
+              <div className="document-result-text">
+                {documentSummary.summary}
+              </div>
+            </section>
+          )}
+
+          <section className="question-section">
+            <h3>Ask questions about your PDF</h3>
+            <p>Get answers based on the uploaded document.</p>
+
+            <form
+              className="question-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                askDocumentQuestion();
+              }}
+            >
+              <input
+                type="text"
+                value={documentQuestion}
+                onChange={(e) => setDocumentQuestion(e.target.value)}
+                placeholder="What are the key points in this document?"
+                maxLength={1000}
+                disabled={!documentFile || askingDocument}
+                aria-label="Question about the PDF"
+              />
+              <button
+                type="submit"
+                disabled={
+                  !documentFile ||
+                  !documentQuestion.trim() ||
+                  askingDocument
+                }
+              >
+                {askingDocument ? "Thinking..." : "Ask AI"}
+              </button>
+            </form>
+          </section>
+
+          {documentAnswer && (
+            <section className="result-card" aria-live="polite">
+              <span className="result-label">
+                <Sparkles size={16} /> DOCUMENT ANSWER
+              </span>
+              <h3>Your question</h3>
+              <p>{documentAnswer.question}</p>
+              <h3>InsightAI's answer</h3>
+              <div className="document-result-text">
+                {documentAnswer.answer}
+              </div>
+            </section>
+          )}
+        </section>
+
 
         <p className="privacy-note">
           <span className="status-dot" />
