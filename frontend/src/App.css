@@ -284,3 +284,233 @@ footer {
   .workspace { padding: 17px; margin-top: 30px; }
   .workspace-heading p { max-width: 250px; line-height: 1.5; }
 }
+
+.question-section {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid #303142;
+  border-radius: 15px;
+  background: #171722;
+}
+
+.question-section h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.question-section > p {
+  color: #9294a9;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.question-form {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.question-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  color: #e9eaf2;
+  background: #0f1018;
+  border: 1px solid #39394d;
+  border-radius: 10px;
+  outline: none;
+}
+
+.question-form input:focus {
+  border-color: #b89aff;
+}
+
+.question-form button {
+  padding: 12px 18px;
+  border: none;
+  border-radius: 10px;
+  background: #b89aff;
+  color: #160e25;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.question-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.answer-card {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #4a3a67;
+  border-radius: 12px;
+  background: #211a30;
+}
+
+.answer-card strong {
+  color: #c5a4ff;
+}
+
+.answer-card p {
+  color: #e2deed;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .question-form {
+    flex-direction: column;
+  }
+}
+
+
+.chat-history {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.chat-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-question {
+  align-self: flex-end;
+  max-width: 88%;
+  padding: 12px 16px;
+  border-radius: 14px 14px 3px 14px;
+  background: #302441;
+  border: 1px solid #49365f;
+}
+
+.chat-question span {
+  color: #c5a4ff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chat-question p,
+.chat-answer p {
+  margin: 7px 0 0;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.chat-answer {
+  align-self: stretch;
+  padding: 15px;
+  background: #1b1728;
+  border: 1px solid #4a3a67;
+  border-radius: 14px;
+}
+
+.chat-answer strong {
+  color: #c5a4ff;
+  font-size: 13px;
+}
+
+.chat-answer p {
+  color: #e2deed;
+}
+
+/* ── Audio section ─────────────────────────────────────────────────────── */
+
+.audio-workspace {
+  margin-top: 28px;
+}
+
+.audio-preview-card {
+  align-items: center;
+}
+
+.audio-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  background: #302441;
+  color: #c7a8ff;
+  flex-shrink: 0;
+}
+
+/* Transcript block */
+.transcript-text {
+  color: #d2cfe0;
+  line-height: 1.85;
+  margin: 14px 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.transcript-warning {
+  color: #ffb86c;
+  font-size: 13px;
+  margin: 10px 0 4px;
+}
+
+/* Language badge next to label */
+.result-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lang-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #c5a4ff;
+  background: #29203f;
+  border: 1px solid #49336a;
+  border-radius: 100px;
+  padding: 4px 10px;
+}
+
+/* Copy transcript button */
+.copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #49336a;
+  border-radius: 8px;
+  background: #29203f;
+  color: #c5a4ff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 14px;
+  transition: background 0.15s;
+}
+
+.copy-button:hover {
+  background: #352b50;
+}
+
+/* Understand Audio result */
+.understanding-card {
+  margin-top: 16px;
+}
+
+.understanding-text {
+  font-family: "DM Sans", sans-serif;
+  font-size: 14px;
+  color: #d2cfe0;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 14px 0 16px;
+}
+
+/* Understand Audio button variant */
+.understand-button {
+  background: linear-gradient(100deg, #a88aff, #8060e0);
+}
