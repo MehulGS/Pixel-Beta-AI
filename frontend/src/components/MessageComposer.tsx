@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type DragEvent } from "react";
-import { Plus, ArrowUp, FileAudio, FileText, ImageIcon, X } from "lucide-react";
+import {
+  useEffect, useRef, useState,
+  type KeyboardEvent, type DragEvent,
+} from "react";
+import { Plus, Send, Mic, FileAudio, FileText, ImageIcon, X } from "lucide-react";
 import type { AttachmentState } from "../types";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { detectModality, validateFile, formatFileSize } from "../lib/api";
@@ -48,7 +51,9 @@ export function MessageComposer({
   }, [initialText, onInitialTextConsumed]);
 
   const effectiveAttachment = newAttachment ?? stickyAttachment ?? null;
-  const canSend = !isLoading && !disabled && (text.trim().length > 0 || effectiveAttachment !== null);
+  const canSend =
+    !isLoading && !disabled &&
+    (text.trim().length > 0 || effectiveAttachment !== null);
 
   function acceptFile(file: File) {
     setFileError("");
@@ -156,7 +161,7 @@ export function MessageComposer({
           aria-label="Attach a file"
           title="Attach image, audio, or PDF"
         >
-          <Plus size={20} />
+          <Plus size={19} />
         </button>
 
         <input
@@ -189,6 +194,16 @@ export function MessageComposer({
 
         <button
           type="button"
+          className="composer-mic"
+          disabled={isLoading || disabled}
+          aria-label="Voice input (coming soon)"
+          title="Voice input — coming soon"
+        >
+          <Mic size={17} />
+        </button>
+
+        <button
+          type="button"
           className={`composer-send ${canSend ? "composer-send--active" : ""}`}
           onClick={handleSend}
           disabled={!canSend}
@@ -197,7 +212,7 @@ export function MessageComposer({
           {isLoading ? (
             <span className="composer-loading-dot" aria-hidden="true" />
           ) : (
-            <ArrowUp size={18} />
+            <Send size={16} />
           )}
         </button>
       </div>

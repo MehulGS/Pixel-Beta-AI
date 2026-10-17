@@ -23,16 +23,13 @@ export function MessageBubble({ message }: Props) {
 
   return (
     <div className={`msg-row ${isUser ? "msg-row--user" : "msg-row--assistant"} ${isError ? "msg-row--error" : ""}`}>
-      {/* ── AI / error avatar ── */}
       {!isUser && (
         <div className="msg-avatar" aria-hidden="true">
           {message.isLoading ? <LoaderCircle size={14} className="spin" /> : isError ? "!" : "P"}
         </div>
       )}
 
-      {/* ── Bubble column ── */}
       <div className="msg-bubble-wrapper">
-        {/* Attachment badge sits ABOVE the flex-row so it doesn't shift the avatar */}
         {isUser && message.attachment && (
           <div className="msg-attachment-badge">
             <ModalityIcon modality={message.attachment.modality} />
@@ -41,7 +38,6 @@ export function MessageBubble({ message }: Props) {
           </div>
         )}
 
-        {/* Inner row: avatar + bubble aligned together */}
         <div className="msg-bubble-row">
           {isUser && (
             <div className="msg-avatar msg-avatar--user" aria-hidden="true">U</div>

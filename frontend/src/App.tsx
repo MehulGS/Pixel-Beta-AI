@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Menu } from "lucide-react";
+import { Menu, Search, AudioWaveform } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
 import { useConversations } from "./hooks/useConversations";
@@ -46,10 +46,10 @@ export default function App() {
           aria-label="Open sidebar"
           aria-expanded={sidebarOpen}
         >
-          <Menu size={22} />
+          <Menu size={20} />
         </button>
         <span className="mobile-header-title">Pixel Beta AI</span>
-        <div style={{ width: 40 }} />
+        <div style={{ width: 36 }} />
       </header>
 
       <Sidebar
@@ -67,6 +67,18 @@ export default function App() {
       />
 
       <main className="app-main">
+        <div className="app-topbar" aria-label="Top navigation">
+          <button className="topbar-btn" aria-label="Search" title="Search (coming soon)">
+            <Search size={17} />
+          </button>
+          <button className="topbar-btn" aria-label="Voice input" title="Voice input (coming soon)">
+            <AudioWaveform size={17} />
+          </button>
+          <button className="topbar-btn topbar-btn--avatar" aria-label="Profile" title="Profile">
+            M
+          </button>
+        </div>
+
         <ChatView
           conversation={activeConversation}
           activeId={activeId}

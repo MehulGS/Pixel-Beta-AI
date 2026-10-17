@@ -24,11 +24,6 @@ from transformers import (
     BlipProcessor,
 )
 
-
-# --------------------------------------------------
-# Configuration
-# --------------------------------------------------
-
 BLIP_ID = "Salesforce/blip-image-captioning-base"
 VLM_ID = "HuggingFaceTB/SmolVLM-256M-Instruct"
 WHISPER_MODEL_SIZE = "small"
@@ -36,8 +31,8 @@ WHISPER_MODEL_SIZE = "small"
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
 OLLAMA_MODEL = "qwen2.5:1.5b"
 
-MAX_IMAGE_SIZE = 8 * 1024 * 1024   # 8 MB
-MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25 MB
+MAX_IMAGE_SIZE = 8 * 1024 * 1024
+MAX_AUDIO_SIZE = 25 * 1024 * 1024
 MAX_TEXT_LENGTH = 5000
 MAX_QUESTION_LENGTH = 1000
 
@@ -52,35 +47,22 @@ ALLOWED_AUDIO_TYPES = {
     "audio/webm",
     "audio/flac",
     "audio/x-flac",
-    # Some browsers send these for common formats
     "video/webm",
     "video/ogg",
-    "application/octet-stream",  # fallback for unknown MIME from some systems
+    "application/octet-stream",
 }
 
 ALLOWED_AUDIO_EXTENSIONS = {
     ".mp3", ".wav", ".m4a", ".ogg", ".webm", ".flac"
 }
 
-
-# --------------------------------------------------
-# Model instances
-# --------------------------------------------------
-
 blip_processor = None
 blip_model = None
 vlm_processor = None
 vlm_model = None
 
-# Whisper model is loaded on first audio request to avoid
-# slowing startup when only image features are used.
 whisper_model: Optional[WhisperModel] = None
 _whisper_lock = asyncio.Lock()
-
-
-# --------------------------------------------------
-# Known Hindi / Hinglish phrase dictionary
-# --------------------------------------------------
 
 HINDI_PHRASES = {
     "kutte main tera khoon pee jaunga": {
@@ -123,7 +105,6 @@ HINDI_PHRASES = {
 
 
 def normalize_text(text: str) -> str:
-    """Normalize case, punctuation, and repeated whitespace for phrase matching."""
     text = text.casefold()
     text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
     return " ".join(text.split())
@@ -136,25 +117,15 @@ NORMALIZED_PHRASES = {
 
 
 def find_known_phrase(text: str):
-    """Return a known-phrase dictionary entry for an exact match, or None."""
     normalized = normalize_text(text)
-    # Exact match first
     if normalized in NORMALIZED_PHRASES:
         return NORMALIZED_PHRASES[normalized]
-    # Check whether the text is substantially covered by one known phrase
     for phrase_key, details in NORMALIZED_PHRASES.items():
         words = phrase_key.split()
-        # Only match if the phrase contains at least 4 words AND the
-        # normalized input is exactly that phrase (or differs only in
-        # surrounding whitespace/punctuation already stripped above).
         if len(words) >= 4 and normalized == phrase_key:
             return details
     return None
 
-
-# --------------------------------------------------
-# Model lifecycle
-# --------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -182,10 +153,6 @@ async def lifespan(app: FastAPI):
     print("Pixel Beta AI shutting down.")
 
 
-# --------------------------------------------------
-# FastAPI application
-# --------------------------------------------------
-
 app = FastAPI(
     title="Pixel Beta AI",
     description=(
@@ -207,10 +174,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# --------------------------------------------------
-# Health check
-# --------------------------------------------------
 
 @app.get("/")
 def home():
@@ -240,10 +203,6 @@ def health():
         "whisper_model_size": WHISPER_MODEL_SIZE,
     }
 
-
-# --------------------------------------------------
-# Image validation helper
-# --------------------------------------------------
 
 async def read_image(file: UploadFile) -> Image.Image:
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
@@ -280,11 +239,6 @@ async def read_image(file: UploadFile) -> Image.Image:
         await file.close()
 
 
-# --------------------------------------------------
-# Image captioning
-# POST /analyze
-# --------------------------------------------------
-
 @app.post("/analyze")
 async def analyze_image(file: UploadFile = File(...)):
     image = await read_image(file)
@@ -305,11 +259,6 @@ async def analyze_image(file: UploadFile = File(...)):
     finally:
         image.close()
 
-
-# --------------------------------------------------
-# Visual question answering
-# POST /ask
-# --------------------------------------------------
 
 @app.post("/ask")
 async def ask_about_image(
@@ -346,7 +295,12 @@ async def ask_about_image(
         inputs = vlm_processor(text=prompt, images=[image], return_tensors="pt")
 
         with torch.inference_mode():
-            output = vlm_model.generate(**inputs, max_new_tokens=150, do_sample=False, num_beams=3,)
+            output = vlm_model.generate(
+                **inputs,
+                max_new_tokens=150,
+                do_sample=False,
+                num_beams=3,
+            )
 
         new_tokens = output[:, inputs["input_ids"].shape[1]:]
         answer = vlm_processor.batch_decode(
@@ -363,11 +317,6 @@ async def ask_about_image(
         image.close()
 
 
-# --------------------------------------------------
-# Multilingual text understanding
-# POST /understand-text
-# --------------------------------------------------
-
 @app.post("/understand-text")
 async def understand_text(text: str = Form(...)):
     text = text.strip()
@@ -381,7 +330,6 @@ async def understand_text(text: str = Form(...)):
             detail="Text must be under 5000 characters.",
         )
 
-    # 1. Check known phrases before calling the LLM.
     known_phrase = find_known_phrase(text)
     if known_phrase:
         return {
@@ -396,7 +344,6 @@ async def understand_text(text: str = Form(...)):
             "source": "known_phrase",
         }
 
-    # 2. Unknown phrases go to Ollama.
     prompt = f"""You are a careful multilingual text interpreter.
 
 The input may be English, Hindi, Roman Hindi, Hinglish,
@@ -424,10 +371,6 @@ Input:
 
     return await _call_ollama(prompt, text)
 
-
-# --------------------------------------------------
-# Ollama helper (shared by text and audio endpoints)
-# --------------------------------------------------
 
 async def _call_ollama(prompt: str, input_text: str) -> dict:
     try:
@@ -487,12 +430,7 @@ async def _call_ollama(prompt: str, input_text: str) -> dict:
         )
 
 
-# --------------------------------------------------
-# Audio validation helpers
-# --------------------------------------------------
-
 def _validate_audio_extension(filename: Optional[str]) -> str:
-    """Return a safe file extension from the filename, or raise HTTP 400."""
     if not filename:
         return ".audio"
     ext = os.path.splitext(filename)[1].lower()
@@ -508,13 +446,8 @@ def _validate_audio_extension(filename: Optional[str]) -> str:
 
 
 def _is_audio_content_type_acceptable(content_type: Optional[str]) -> bool:
-    """
-    Return True if the MIME type looks like an audio file.
-    Some browsers/platforms report generic types for valid audio, so we
-    accept 'application/octet-stream' and fall back to extension validation.
-    """
     if content_type is None:
-        return True  # defer to extension check
+        return True
     return content_type.split(";")[0].strip() in ALLOWED_AUDIO_TYPES
 
 
@@ -531,21 +464,16 @@ def _ffmpeg_available() -> bool:
 
 
 def _convert_to_wav(input_path: str) -> str:
-    """
-    Use FFmpeg to convert input audio to 16-kHz mono WAV (PCM s16le).
-    Returns the path to the converted temporary file.
-    Raises HTTPException if FFmpeg fails.
-    """
     output_fd, output_path = tempfile.mkstemp(suffix=".wav")
     os.close(output_fd)
 
     cmd = [
         "ffmpeg",
-        "-y",              # overwrite output if it exists
+        "-y",
         "-i", input_path,
-        "-ar", "16000",    # 16 kHz
-        "-ac", "1",        # mono
-        "-f", "wav",       # PCM WAV
+        "-ar", "16000",
+        "-ac", "1",
+        "-f", "wav",
         "-acodec", "pcm_s16le",
         output_path,
     ]
@@ -580,17 +508,12 @@ def _convert_to_wav(input_path: str) -> str:
     return output_path
 
 
-# --------------------------------------------------
-# Whisper model loader (thread-safe, lazy)
-# --------------------------------------------------
-
 async def _get_whisper_model() -> WhisperModel:
     global whisper_model
     if whisper_model is not None:
         return whisper_model
 
     async with _whisper_lock:
-        # Double-check after acquiring the lock
         if whisper_model is not None:
             return whisper_model
 
@@ -606,37 +529,17 @@ async def _get_whisper_model() -> WhisperModel:
     return whisper_model
 
 
-# --------------------------------------------------
-# Transcription segment schema
-# --------------------------------------------------
-
 class TranscriptSegment(BaseModel):
     start: float
     end: float
     text: str
 
 
-# --------------------------------------------------
-# Audio transcription
-# POST /transcribe-audio
-# --------------------------------------------------
-
 @app.post("/transcribe-audio")
 async def transcribe_audio(
     file: UploadFile = File(...),
     language: Optional[str] = Form(None),
 ):
-    """
-    Transcribe an audio file.
-
-    - **file**: Audio file (MP3, WAV, M4A, OGG, WebM, FLAC — max 25 MB)
-    - **language**: Optional language code (`en`, `hi`) or `auto` for
-      automatic detection. Defaults to automatic detection.
-
-    Returns the transcript, detected language, language probability,
-    per-segment timestamps, and model name.
-    """
-    # ------ Validate content type ------
     if not _is_audio_content_type_acceptable(file.content_type):
         await file.close()
         raise HTTPException(
@@ -647,10 +550,8 @@ async def transcribe_audio(
             ),
         )
 
-    # ------ Validate extension ------
     ext = _validate_audio_extension(file.filename)
 
-    # ------ Read and size-check ------
     contents = await file.read(MAX_AUDIO_SIZE + 1)
     await file.close()
 
@@ -663,14 +564,10 @@ async def transcribe_audio(
             detail="Audio must not exceed 25 MB.",
         )
 
-    # ------ Resolve language setting ------
-    # None / "auto" → let Whisper auto-detect
-    # "en" / "hi" etc. → pass directly to Whisper
     whisper_language: Optional[str] = None
     if language and language.lower() != "auto":
         whisper_language = language.lower()
 
-    # ------ Write to temp file ------
     temp_orig_path: Optional[str] = None
     temp_wav_path: Optional[str] = None
 
@@ -680,37 +577,25 @@ async def transcribe_audio(
         with open(temp_orig_path, "wb") as f:
             f.write(contents)
 
-        # ------ Audio preprocessing ------
-        # Convert to 16-kHz mono WAV for best Whisper compatibility.
-        # Whisper / faster-whisper can read many formats directly, but
-        # normalising to PCM WAV avoids ffmpeg-inside-the-library failures
-        # on unusual encodings (e.g. variable-bitrate M4A, OGG).
         inference_path = temp_orig_path
         if _ffmpeg_available():
             temp_wav_path = _convert_to_wav(temp_orig_path)
             inference_path = temp_wav_path
-        # If FFmpeg is missing we fall back to the original file and let
-        # faster-whisper attempt to decode it directly.
 
-        # ------ Load Whisper (lazy, thread-safe) ------
         model = await _get_whisper_model()
 
-        # ------ Run transcription off the event loop ------
         def _transcribe():
             segs, info = model.transcribe(
                 inference_path,
                 beam_size=5,
-                task="transcribe",          # never translate by default
-                language=whisper_language,  # None → auto-detect
-                vad_filter=False,           # keep all audio; VAD can drop
-                                            # short or quiet speech segments
+                task="transcribe",
+                language=whisper_language,
+                vad_filter=False,
                 condition_on_previous_text=False,
                 temperature=0.0,
-                log_prob_threshold=-1.0,    # accept all segments
+                log_prob_threshold=-1.0,
                 no_speech_threshold=0.6,
             )
-            # Materialise the generator *inside* the thread so we don't
-            # hold a reference across to_thread boundaries.
             segment_list = [
                 {
                     "start": round(s.start, 2),
@@ -723,7 +608,6 @@ async def transcribe_audio(
 
         segments_data, info = await asyncio.to_thread(_transcribe)
 
-        # ------ Build transcript ------
         transcript = " ".join(
             seg["text"] for seg in segments_data if seg["text"]
         ).strip()
@@ -762,11 +646,6 @@ async def transcribe_audio(
                 pass
 
 
-# --------------------------------------------------
-# Audio understanding
-# POST /understand-audio
-# --------------------------------------------------
-
 class UnderstandAudioRequest(BaseModel):
     transcript: str
     language: Optional[str] = None
@@ -775,19 +654,6 @@ class UnderstandAudioRequest(BaseModel):
 
 @app.post("/understand-audio")
 async def understand_audio(payload: UnderstandAudioRequest):
-    """
-    Interpret an audio transcript using the local Ollama model.
-
-    - **transcript**: The text produced by /transcribe-audio.
-    - **language**: Optional detected language code from transcription.
-    - **filename**: Optional original filename for context.
-
-    Returns a structured analysis: language note, summary, main points,
-    literal/intended meaning, idioms, emotion/tone, and uncertainty flags.
-
-    The model is `qwen2.5:1.5b` running locally via Ollama.
-    Ollama must be running at http://127.0.0.1:11434.
-    """
     transcript = payload.transcript.strip()
 
     if not transcript:
@@ -802,7 +668,6 @@ async def understand_audio(payload: UnderstandAudioRequest):
             detail="Transcript is too long (max 5000 characters).",
         )
 
-    # Flag clearly failed or suspiciously short transcripts
     transcription_warning = ""
     if len(transcript) < 10:
         transcription_warning = (
@@ -810,7 +675,6 @@ async def understand_audio(payload: UnderstandAudioRequest):
             "or inaccurate. Treat this analysis with caution."
         )
 
-    # Check known Hindi phrases first (quick path, no LLM needed)
     known = find_known_phrase(transcript)
     if known:
         answer = (
@@ -995,7 +859,6 @@ async def summarize_pdf(file: UploadFile = File(...)):
                 detail="No readable text found in this PDF."
             )
 
-        # Keep the first version suitable for short documents.
         text = text[:12000]
 
         prompt = f"""
@@ -1049,7 +912,6 @@ DOCUMENT:
         )
     finally:
         await file.close()
-
 
 
 @app.post("/document/ask")

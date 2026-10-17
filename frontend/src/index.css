@@ -1,7 +1,3 @@
-/* index.css — minimal global reset only
-   All actual styling lives in App.css via the design system.
-   We keep this file to avoid import errors in main.tsx. */
-
 *, *::before, *::after {
   box-sizing: border-box;
 }

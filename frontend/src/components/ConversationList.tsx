@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Pin, Pencil, Trash2, MoreHorizontal, Check, X } from "lucide-react";
+import {
+  Pin, Pencil, Trash2, MoreHorizontal,
+  Check, X, MessageSquare,
+} from "lucide-react";
 import type { Conversation } from "../types";
 
 interface Props {
@@ -14,11 +17,24 @@ interface Props {
 
 function getGroup(ts: number): string {
   const diff = Date.now() - ts;
-  const day = 86400000;
+  const day = 86_400_000;
   if (diff < day) return "Today";
   if (diff < 2 * day) return "Yesterday";
   if (diff < 7 * day) return "Previous 7 Days";
   return "Older";
+}
+
+function formatTime(ts: number): string {
+  const now = Date.now();
+  const diff = now - ts;
+  const day = 86_400_000;
+  if (diff < day) {
+    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  if (diff < 7 * day) {
+    return new Date(ts).toLocaleDateString([], { weekday: "short" });
+  }
+  return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 const GROUP_ORDER = ["Pinned", "Today", "Yesterday", "Previous 7 Days", "Older"];
@@ -96,7 +112,10 @@ export function ConversationList({
           <div key={group} className="conv-group">
             <span className="conv-group-label">{group}</span>
             {items.map((conv) => (
-              <div key={conv.id} className={`conv-item ${conv.id === activeId ? "conv-item--active" : ""}`}>
+              <div
+                key={conv.id}
+                className={`conv-item ${conv.id === activeId ? "conv-item--active" : ""}`}
+              >
                 {renamingId === conv.id ? (
                   <div className="conv-rename">
                     <input
@@ -124,8 +143,13 @@ export function ConversationList({
                       onClick={() => { onSelect(conv.id); onCloseSidebar?.(); }}
                       title={conv.title}
                     >
-                      {conv.pinned && <Pin size={11} className="pin-indicator" />}
+                      {conv.pinned ? (
+                        <Pin size={12} className="pin-indicator" aria-hidden="true" />
+                      ) : (
+                        <MessageSquare size={13} className="conv-icon" aria-hidden="true" />
+                      )}
                       <span className="conv-title-text">{conv.title}</span>
+                      <span className="conv-time">{formatTime(conv.updatedAt)}</span>
                     </button>
 
                     <div className="conv-menu-wrapper">
@@ -141,16 +165,16 @@ export function ConversationList({
                       </button>
 
                       {menuOpenId === conv.id && (
-                        <div className="conv-dropdown" onClick={(e) => e.stopPropagation()}>
-                          <button onClick={() => { onPin(conv.id); setMenuOpenId(null); }}>
+                        <div className="conv-dropdown" onClick={(e) => e.stopPropagation()} role="menu">
+                          <button role="menuitem" onClick={() => { onPin(conv.id); setMenuOpenId(null); }}>
                             <Pin size={13} />
                             {conv.pinned ? "Unpin" : "Pin"}
                           </button>
-                          <button onClick={() => startRename(conv)}>
+                          <button role="menuitem" onClick={() => startRename(conv)}>
                             <Pencil size={13} />
                             Rename
                           </button>
-                          <button className="danger" onClick={() => { setMenuOpenId(null); onDelete(conv.id); }}>
+                          <button role="menuitem" className="danger" onClick={() => { setMenuOpenId(null); onDelete(conv.id); }}>
                             <Trash2 size={13} />
                             Delete
                           </button>

@@ -37,9 +37,6 @@ export function ChatView({
   const [isLoading, setIsLoading] = useState(false);
   const [stickyAttachment, setStickyAttachment] = useState<AttachmentState | null>(null);
 
-  // Track which conversation "owns" the current sticky attachment so we only
-  // clear it when the user navigates to a *different* conversation, not when
-  // the very first message auto-creates a new conversation for this attachment.
   const stickyConvIdRef = useRef<string | null>(null);
 
   const prevActiveIdRef = useRef<string | null>(null);
@@ -48,10 +45,6 @@ export function ChatView({
       const prevId = prevActiveIdRef.current;
       prevActiveIdRef.current = activeId;
 
-      // Only clear the sticky attachment if we are switching to a conversation
-      // that is NOT the one that owns the current attachment.
-      // This prevents the auto-created conversation from wiping the attachment
-      // that was just set in the same handleSend call.
       const switchingAway = activeId !== stickyConvIdRef.current && prevId !== null;
       if (switchingAway) {
         if (stickyAttachment?.previewUrl) URL.revokeObjectURL(stickyAttachment.previewUrl);
@@ -82,8 +75,6 @@ export function ChatView({
       let convId = activeId;
       if (!convId) convId = onNeedNewConversation();
 
-      // Record that this conversation owns the sticky attachment so the
-      // activeId-change effect won't clear it when the new conv ID is set.
       if (newAttachment) {
         stickyConvIdRef.current = convId;
       } else if (!stickyAttachment) {
