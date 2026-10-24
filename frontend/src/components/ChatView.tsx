@@ -7,10 +7,13 @@ import {
   analyzeImage,
   askAboutImage,
   understandText,
+  pixelChat,
   transcribeAudio,
   understandAudio,
   summarizeDocument,
   askDocument,
+  saveConversationMessage,
+  saveMemory,
 } from "../lib/api";
 import type { AttachmentState, Conversation, Message, Modality } from "../types";
 
@@ -37,6 +40,66 @@ function stripMarkdownForSpeech(text: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+
+interface MemorySuggestion {
+  content: string;
+  category: string;
+}
+
+function suggestMemoryFromText(text: string): MemorySuggestion | null {
+  const normalized = text.trim().replace(/\s+/g, " ");
+
+  if (normalized.length < 8 || normalized.length > 500) {
+    return null;
+  }
+
+  const patterns: {
+    regex: RegExp;
+    category: string;
+    content: (match: RegExpMatchArray) => string;
+  }[] = [
+      {
+        regex: /\bmy favorite programming language is ([^.!?]+)[.!?]?$/i,
+        category: "preferences",
+        content: (m) => `Favorite programming language: ${m[1].trim()}`,
+      },
+      {
+        regex: /\bi prefer ([^.!?]+)[.!?]?$/i,
+        category: "preferences",
+        content: (m) => `Preference: ${m[1].trim()}`,
+      },
+      {
+        regex: /\bi work as (?:a |an )?([^.!?]+)[.!?]?$/i,
+        category: "work",
+        content: (m) => `Occupation: ${m[1].trim()}`,
+      },
+      {
+        regex: /\bi am learning ([^.!?]+)[.!?]?$/i,
+        category: "learning",
+        content: (m) => `Currently learning: ${m[1].trim()}`,
+      },
+      {
+        regex: /\bi am interested in ([^.!?]+)[.!?]?$/i,
+        category: "interests",
+        content: (m) => `Interest: ${m[1].trim()}`,
+      },
+    ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern.regex);
+
+    if (match) {
+      return {
+        content: pattern.content(match),
+        category: pattern.category,
+      };
+    }
+  }
+
+  return null;
+}
+
 
 function getPixelGreeting(): string {
   const hour = new Date().getHours();
@@ -281,6 +344,8 @@ export function ChatView({
       }
 
       const modality: Modality = attachment?.modality ?? "text";
+      const memorySuggestion =
+        modality === "text" ? suggestMemoryFromText(text) : null;
 
       const userMsg: Message = {
         id: generateId("msg"),
@@ -298,6 +363,15 @@ export function ChatView({
           : undefined,
       };
       onAppendMessage(convId, userMsg);
+
+      // Best-effort SQLite sync; local chat remains usable if the API is offline.
+      void saveConversationMessage({
+        conversation_id: convId,
+        role: "user",
+        content: userMsg.content,
+      }).catch((error) => {
+        console.warn("[PIXEL Memory] Could not save user message:", error);
+      });
 
       const aiMsgId = generateId("msg");
       onAppendMessage(convId, {
@@ -354,7 +428,7 @@ export function ChatView({
           if (!text.trim()) {
             responseText = "Please enter a question or attach a file.";
           } else {
-            const res = await understandText(text);
+            const res = await pixelChat(convId, text);
             responseText = res.answer;
           }
         }
@@ -364,6 +438,34 @@ export function ChatView({
           isLoading: false,
           timestamp: Date.now(),
         });
+
+        // Save the completed assistant response to local SQLite.
+        void saveConversationMessage({
+          conversation_id: convId,
+          role: "assistant",
+          content: responseText,
+        }).catch((error) => {
+          console.warn("[PIXEL Memory] Could not save assistant message:", error);
+        });
+
+
+        if (memorySuggestion) {
+          const approved = window.confirm(
+            `Would you like PIXEL to remember this for future conversations?\n\n` +
+            `${memorySuggestion.content}\n\n` +
+            `Category: ${memorySuggestion.category}`
+          );
+
+          if (approved) {
+            try {
+              await saveMemory(memorySuggestion);
+              console.info("[PIXEL Memory] Approved fact saved.");
+            } catch (error) {
+              console.error("[PIXEL Memory] Could not save approved fact:", error);
+              window.alert("PIXEL could not save this memory. Please try again.");
+            }
+          }
+        }
 
         // Speak the completed answer after it has been saved to chat history.
         speakResponse(responseText);

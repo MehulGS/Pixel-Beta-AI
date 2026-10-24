@@ -9,6 +9,7 @@ interface Props {
   activeId: string | null;
   isOpen: boolean;
   onClose: () => void;
+  onOpenMemory: () => void;
   onNewChat: () => void;
   onSelect: (id: string) => void;
   onRename: (id: string, title: string) => void;
@@ -59,6 +60,7 @@ export function Sidebar({
   onNewChat,
   onSelect,
   onRename,
+  onOpenMemory,
   onDelete,
   onPin,
   theme,
@@ -68,8 +70,8 @@ export function Sidebar({
 
   const filtered = search.trim()
     ? conversations.filter((c) =>
-        c.title.toLowerCase().includes(search.toLowerCase())
-      )
+      c.title.toLowerCase().includes(search.toLowerCase())
+    )
     : conversations;
 
   return (
@@ -135,11 +137,15 @@ export function Sidebar({
           <ThemeSelector theme={theme} setTheme={setTheme} />
           <button
             className="sidebar-settings-btn"
-            aria-label="Settings"
-            title="Settings (coming soon)"
+            onClick={() => {
+              onOpenMemory();
+              onClose();
+            }}
+            aria-label="Knowledge and Memory"
+            title="Knowledge & Memory"
           >
             <Settings size={14} />
-            <span>Settings</span>
+            <span>Knowledge &amp; Memory</span>
           </button>
           <div className="sidebar-status">
             <span className="status-dot" aria-hidden="true" />

@@ -20,38 +20,127 @@ async function parseError(res: Response): Promise<string> {
   }
 }
 
+async function parseResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<T>;
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  return parseResponse<T>(await fetch(url, init));
+}
+
+export interface ConversationMemoryMessage {
+  id: number;
+  conversation_id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+export interface SavedMemory {
+  id: number;
+  content: string;
+  category: string;
+  created_at: string;
+}
+
+export async function saveConversationMessage(payload: {
+  conversation_id: string;
+  role: "user" | "assistant";
+  content: string;
+}): Promise<ConversationMemoryMessage> {
+  return requestJson<ConversationMemoryMessage>(`${API_URL}/memory/conversations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getConversationMessages(
+  conversationId: string,
+  limit = 100
+): Promise<{ conversation_id: string; count: number; messages: ConversationMemoryMessage[] }> {
+  return requestJson(
+    `${API_URL}/memory/conversations/${encodeURIComponent(conversationId)}?limit=${limit}`
+  );
+}
+
+export async function saveMemory(payload: {
+  content: string;
+  category?: string;
+}): Promise<SavedMemory> {
+  return requestJson<SavedMemory>(`${API_URL}/memory/facts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getMemories(options?: {
+  category?: string;
+  limit?: number;
+}): Promise<{ count: number; memories: SavedMemory[] }> {
+  const params = new URLSearchParams();
+  if (options?.category) params.set("category", options.category);
+  if (options?.limit !== undefined) params.set("limit", String(options.limit));
+  const query = params.toString();
+  return requestJson(`${API_URL}/memory/facts${query ? `?${query}` : ""}`);
+}
+
+export async function deleteMemory(memoryId: number): Promise<{
+  deleted: boolean;
+  memory_id: number;
+}> {
+  return requestJson(`${API_URL}/memory/facts/${memoryId}`, { method: "DELETE" });
+}
+
 export async function analyzeImage(file: File): Promise<AnalyzeResponse> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${API_URL}/analyze`, { method: "POST", body: form });
-  if (!res.ok) throw new Error(await parseError(res));
-  return res.json();
+  return parseResponse(await fetch(`${API_URL}/analyze`, { method: "POST", body: form }));
 }
 
 export async function askAboutImage(file: File, question: string): Promise<AskResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("question", question);
-  const res = await fetch(`${API_URL}/ask`, { method: "POST", body: form });
-  if (!res.ok) throw new Error(await parseError(res));
-  return res.json();
+  return parseResponse(await fetch(`${API_URL}/ask`, { method: "POST", body: form }));
 }
 
 export async function understandText(text: string): Promise<UnderstandTextResponse> {
   const form = new FormData();
   form.append("text", text);
-  const res = await fetch(`${API_URL}/understand-text`, { method: "POST", body: form });
-  if (!res.ok) throw new Error(await parseError(res));
-  return res.json();
+  return parseResponse(await fetch(`${API_URL}/understand-text`, { method: "POST", body: form }));
 }
+
+
+export interface PixelChatResponse {
+  conversation_id: string;
+  answer: string;
+  model: string;
+  source: string;
+}
+
+export async function pixelChat(
+  conversationId: string,
+  message: string
+): Promise<PixelChatResponse> {
+  return requestJson<PixelChatResponse>(`${API_URL}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      conversation_id: conversationId,
+      message,
+    }),
+  });
+}
+
 
 export async function transcribeAudio(file: File, language?: string): Promise<TranscribeResponse> {
   const form = new FormData();
   form.append("file", file);
   if (language && language !== "auto") form.append("language", language);
-  const res = await fetch(`${API_URL}/transcribe-audio`, { method: "POST", body: form });
-  if (!res.ok) throw new Error(await parseError(res));
-  return res.json();
+  return parseResponse(await fetch(`${API_URL}/transcribe-audio`, { method: "POST", body: form }));
 }
 
 export async function understandAudio(
@@ -64,25 +153,20 @@ export async function understandAudio(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ transcript, language, filename }),
   });
-  if (!res.ok) throw new Error(await parseError(res));
-  return res.json();
+  return parseResponse(res);
 }
 
 export async function summarizeDocument(file: File): Promise<DocumentSummaryResponse> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${API_URL}/document/summarize`, { method: "POST", body: form });
-  if (!res.ok) throw new Error(await parseError(res));
-  return res.json();
+  return parseResponse(await fetch(`${API_URL}/document/summarize`, { method: "POST", body: form }));
 }
 
 export async function askDocument(file: File, question: string): Promise<DocumentAskResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("question", question);
-  const res = await fetch(`${API_URL}/document/ask`, { method: "POST", body: form });
-  if (!res.ok) throw new Error(await parseError(res));
-  return res.json();
+  return parseResponse(await fetch(`${API_URL}/document/ask`, { method: "POST", body: form }));
 }
 
 export function formatFileSize(bytes: number): string {

@@ -6,6 +6,7 @@ import { useConversations } from "./hooks/useConversations";
 import { useTheme } from "./hooks/useTheme";
 import type { Message } from "./types";
 import "./App.css";
+import { MemoryView } from "./components/MemoryView";
 
 export default function App() {
   const { theme, setTheme } = useTheme();
@@ -25,6 +26,7 @@ export default function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [suggestionText, setSuggestionText] = useState<string | null>(null);
+  const [showMemory, setShowMemory] = useState(false);
 
   const handleNeedNewConversation = useCallback((): string => {
     const conv = startNewConversation();
@@ -59,6 +61,7 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
         onNewChat={handleNewChat}
         onSelect={selectConversation}
+        onOpenMemory={() => setShowMemory(true)}
         onRename={rename}
         onDelete={remove}
         onPin={pin}
@@ -79,17 +82,21 @@ export default function App() {
           </button>
         </div>
 
-        <ChatView
-          conversation={activeConversation}
-          activeId={activeId}
-          onAppendMessage={(convId: string, msg: Message) => appendMessage(convId, msg)}
-          onPatchMessage={(convId: string, msgId: string, updates: Partial<Message>) =>
-            patchMessage(convId, msgId, updates)
-          }
-          onNeedNewConversation={handleNeedNewConversation}
-          suggestionText={suggestionText}
-          onSuggestionConsumed={() => setSuggestionText(null)}
-        />
+        {showMemory ? (
+          <MemoryView onBack={() => setShowMemory(false)} />
+        ) : (
+          <ChatView
+            conversation={activeConversation}
+            activeId={activeId}
+            onAppendMessage={(convId: string, msg: Message) => appendMessage(convId, msg)}
+            onPatchMessage={(convId: string, msgId: string, updates: Partial<Message>) =>
+              patchMessage(convId, msgId, updates)
+            }
+            onNeedNewConversation={handleNeedNewConversation}
+            suggestionText={suggestionText}
+            onSuggestionConsumed={() => setSuggestionText(null)}
+          />
+        )}
       </main>
     </div>
   );
