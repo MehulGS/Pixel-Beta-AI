@@ -24,6 +24,13 @@ from transformers import (
     BlipProcessor,
 )
 
+from pixel_voice.bridge import (
+    get_events,
+    get_status,
+    publish_wake_event,
+    set_listener_status,
+)
+
 BLIP_ID = "Salesforce/blip-image-captioning-base"
 VLM_ID = "HuggingFaceTB/SmolVLM-256M-Instruct"
 WHISPER_MODEL_SIZE = "small"
@@ -203,6 +210,26 @@ def health():
         "whisper_model_size": WHISPER_MODEL_SIZE,
     }
 
+@app.get("/voice/status")
+def voice_status():
+    return get_status()
+
+
+@app.get("/voice/events")
+def voice_events(after_id: int = 0):
+    if after_id < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="after_id must be zero or greater.",
+        )
+
+    return get_events(after_id=after_id)
+
+
+@app.post("/voice/wake")
+def voice_wake():
+    set_listener_status(True)
+    return publish_wake_event()
 
 async def read_image(file: UploadFile) -> Image.Image:
     allowed_types = {"image/jpeg", "image/png", "image/webp"}

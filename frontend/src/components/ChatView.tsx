@@ -24,6 +24,28 @@ interface Props {
   onSuggestionConsumed?: () => void;
 }
 
+function stripMarkdownForSpeech(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, " Code block omitted. ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/[*_~>#|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getPixelGreeting(): string {
+  const hour = new Date().getHours();
+
+  if (hour < 12) return "Good morning!";
+  if (hour < 17) return "Good afternoon!";
+  return "Good evening!";
+}
+
 export function ChatView({
   conversation,
   onAppendMessage,
@@ -36,6 +58,18 @@ export function ChatView({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [stickyAttachment, setStickyAttachment] = useState<AttachmentState | null>(null);
+
+  const [voiceCommandRequest, setVoiceCommandRequest] = useState(0);
+  const [wakeStatus, setWakeStatus] = useState("Waiting for Hey Pixel...");
+  const lastWakeEventIdRef = useRef(0);
+  const hasGreetedRef = useRef(false);
+  const wakeSessionActiveRef = useRef(false);
+
+  // Voice replies are enabled by default. The user can pause/resume them using
+  // the speaker control rendered below the chat.
+  const [voiceRepliesEnabled, setVoiceRepliesEnabled] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const speechUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const stickyConvIdRef = useRef<string | null>(null);
 
@@ -52,12 +86,177 @@ export function ChatView({
         stickyConvIdRef.current = null;
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation?.messages.length]);
+
+  // Stop speech when leaving this chat view or unmounting.
+  useEffect(() => {
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const speakResponse = useCallback((responseText: string) => {
+    if (!voiceRepliesEnabled || !("speechSynthesis" in window)) return;
+
+    const plainText = stripMarkdownForSpeech(responseText);
+    if (!plainText) return;
+
+    // Cancel any previous utterance to prevent overlapping replies.
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(plainText);
+    utterance.lang = "en-IN";
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      speechUtteranceRef.current = null;
+    };
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+      speechUtteranceRef.current = null;
+    };
+
+    speechUtteranceRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  }, [voiceRepliesEnabled]);
+
+  const handleVoiceCommandFinished = useCallback(() => {
+    wakeSessionActiveRef.current = false;
+  }, []);
+
+  const speakGreeting = useCallback((): Promise<void> => {
+    return new Promise((resolve) => {
+      if (!("speechSynthesis" in window)) {
+        resolve();
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(
+        `${getPixelGreeting()} Pixel is listening. How can I help you?`
+      );
+
+      utterance.lang = "en-IN";
+      utterance.rate = 1;
+      utterance.pitch = 1;
+
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+
+      window.speechSynthesis.speak(utterance);
+    });
+  }, []);
+
+  const stopSpeaking = useCallback(() => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    speechUtteranceRef.current = null;
+    setIsSpeaking(false);
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let timer: number | undefined;
+
+    const pollWakeEvents = async () => {
+      try {
+        // On first connection, skip events created before this page opened.
+        if (lastWakeEventIdRef.current === 0) {
+          const initialResponse = await fetch(
+            "http://127.0.0.1:8000/voice/events?after_id=0"
+          );
+
+          if (!initialResponse.ok) {
+            throw new Error("Could not connect to PIXEL voice API.");
+          }
+
+          const initialData = await initialResponse.json();
+
+          if (disposed) return;
+
+          lastWakeEventIdRef.current = initialData.latest_id ?? 0;
+          setWakeStatus("Waiting for Hey Pixel...");
+          return;
+        }
+
+        const response = await fetch(
+          `http://127.0.0.1:8000/voice/events?after_id=${lastWakeEventIdRef.current}`
+        );
+
+        if (!response.ok) {
+          throw new Error("Could not read wake events.");
+        }
+
+        const data = await response.json();
+
+        if (disposed) return;
+
+        for (const event of data.events ?? []) {
+          lastWakeEventIdRef.current = Math.max(
+            lastWakeEventIdRef.current,
+            event.id
+          );
+
+          if (event.type === "wake" && !wakeSessionActiveRef.current) {
+            if ("speechSynthesis" in window) {
+              window.speechSynthesis.cancel();
+            }
+            speechUtteranceRef.current = null;
+            setIsSpeaking(false);
+            wakeSessionActiveRef.current = true;
+
+            const shouldGreet = !hasGreetedRef.current;
+
+            if (shouldGreet) {
+              hasGreetedRef.current = true;
+              setWakeStatus("PIXEL is starting. Speaking greeting...");
+
+              void speakGreeting().then(() => {
+                setWakeStatus("PIXEL is listening. Speak your command.");
+                setVoiceCommandRequest((value) => value + 1);
+              });
+            } else {
+              setWakeStatus("Hey Pixel detected. Listening for your command...");
+              setVoiceCommandRequest((value) => value + 1);
+            }
+          }
+        }
+
+        lastWakeEventIdRef.current = Math.max(
+          lastWakeEventIdRef.current,
+          data.latest_id ?? 0
+        );
+      } catch {
+        if (!disposed) {
+          setWakeStatus("Voice API disconnected. Check the backend.");
+        }
+      }
+    };
+
+    void pollWakeEvents();
+
+    timer = window.setInterval(() => {
+      void pollWakeEvents();
+    }, 1000);
+
+    return () => {
+      disposed = true;
+      if (timer !== undefined) window.clearInterval(timer);
+    };
+  }, [speakGreeting]);
 
   const handleSend = useCallback(
     async (text: string, newAttachment: AttachmentState | null) => {
@@ -91,11 +290,11 @@ export function ChatView({
         modality,
         attachment: newAttachment
           ? {
-              filename: newAttachment.file.name,
-              filesize: newAttachment.file.size,
-              filetype: newAttachment.file.type,
-              modality,
-            }
+            filename: newAttachment.file.name,
+            filesize: newAttachment.file.size,
+            filetype: newAttachment.file.type,
+            modality,
+          }
           : undefined,
       };
       onAppendMessage(convId, userMsg);
@@ -129,7 +328,7 @@ export function ChatView({
             : "";
 
           if (transcribeRes.transcription_status === "empty_transcript" || !transcribeRes.transcript) {
-            responseText = "⚠️ No speech detected. The file may be silent, too noisy, or in an unsupported format.";
+            responseText = "No speech detected. The file may be silent, too noisy, or in an unsupported format.";
           } else {
             responseText = `**Transcript**${langLabel}\n\n${transcribeRes.transcript}\n\n---\n`;
             try {
@@ -140,7 +339,7 @@ export function ChatView({
               );
               responseText += `**Analysis**\n\n${understandRes.analysis}`;
             } catch {
-              responseText += "*(Audio understanding unavailable — Ollama may not be running.)*";
+              responseText += "Audio understanding unavailable — Ollama may not be running.";
             }
           }
         } else if (modality === "document" && attachment) {
@@ -165,10 +364,16 @@ export function ChatView({
           isLoading: false,
           timestamp: Date.now(),
         });
+
+        // Speak the completed answer after it has been saved to chat history.
+        speakResponse(responseText);
       } catch (err) {
+        const errorText = `Something went wrong. ${err instanceof Error ? err.message : "Please try again."
+          }`;
+
         onPatchMessage(convId, aiMsgId, {
           role: "error",
-          content: `⚠️ ${err instanceof Error ? err.message : "Something went wrong. Please try again."}`,
+          content: `⚠️ ${errorText}`,
           isLoading: false,
           timestamp: Date.now(),
         });
@@ -176,7 +381,15 @@ export function ChatView({
         setIsLoading(false);
       }
     },
-    [isLoading, activeId, stickyAttachment, onAppendMessage, onPatchMessage, onNeedNewConversation]
+    [
+      isLoading,
+      activeId,
+      stickyAttachment,
+      onAppendMessage,
+      onPatchMessage,
+      onNeedNewConversation,
+      speakResponse,
+    ]
   );
 
   const clearStickyAttachment = useCallback(() => {
@@ -203,15 +416,48 @@ export function ChatView({
       </div>
 
       <div className="chat-composer-area">
+        <div className="chat-voice-controls">
+          <button
+            type="button"
+            className="chat-voice-toggle"
+            onClick={() => {
+              setVoiceRepliesEnabled((enabled) => {
+                const nextEnabled = !enabled;
+                if (!nextEnabled) stopSpeaking();
+                return nextEnabled;
+              });
+            }}
+            aria-pressed={voiceRepliesEnabled}
+            title={voiceRepliesEnabled ? "Turn off spoken replies" : "Turn on spoken replies"}
+          >
+            {voiceRepliesEnabled ? "🔊 Voice replies on" : "🔇 Voice replies off"}
+          </button>
+
+          {isSpeaking && (
+            <button
+              type="button"
+              className="chat-voice-toggle"
+              onClick={stopSpeaking}
+              title="Stop the current spoken reply"
+            >
+              Stop speaking
+            </button>
+          )}
+        </div>
+
         <MessageComposer
           onSend={handleSend}
           isLoading={isLoading}
+          voiceCommandRequest={voiceCommandRequest}
+          onVoiceCommandFinished={handleVoiceCommandFinished}
           initialText={suggestionText}
           onInitialTextConsumed={onSuggestionConsumed}
           stickyAttachment={stickyAttachment}
           onClearStickyAttachment={clearStickyAttachment}
         />
+
         <p className="chat-footer-note">
+          {wakeStatus}
           Pixel Beta AI · All inference runs locally · Responses may be inaccurate
         </p>
       </div>
